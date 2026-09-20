@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- QuickChat app icon source. macOS Big Sur grid: 824x824 squircle at (100,100), r=185.
+       Cyan brand gradient (#22d3ee -> #38bdf8) + white speech bubble with three dots,
+       reusing the tray-icon motif. Feed to `tauri icon` to regenerate the full set. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <radialGradient id="gloss" cx="320" cy="250" r="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="18"/>
+      <feOffset dy="16" result="off"/>
+      <feFlood flood-color="#053b47" flood-opacity="0.38"/>
+      <feComposite in2="off" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <mask id="bubble">
+      <!-- White = visible bubble; black dots = holes that reveal the gradient behind. -->
+      <rect x="278" y="300" width="468" height="300" rx="86" fill="white"/>
+      <path d="M 404 588 L 372 726 L 520 588 Z" fill="white"/>
+      <circle cx="400" cy="450" r="34" fill="black"/>
+      <circle cx="512" cy="450" r="34" fill="black"/>
+      <circle cx="624" cy="450" r="34" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Rounded-square background -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#gloss)"/>
+
+  <!-- White speech bubble (with dot holes) + soft drop shadow -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="#ffffff" mask="url(#bubble)"/>
+  </g>
+</svg>

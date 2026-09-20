@@ -5,6 +5,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export interface Msg {
   role: "user" | "assistant" | "system";
   content: string;
+  /** 思考 / 推理内容（reasoning_content / thinking），流式累积 */
+  reasoning?: string;
 }
 
 const messages = ref<Msg[]>([]);
@@ -19,6 +21,13 @@ async function ensureListeners() {
     await listen<string>("chat-token", (e) => {
       const last = messages.value[messages.value.length - 1];
       if (last && last.role === "assistant") last.content += e.payload;
+    })
+  );
+  unlisteners.push(
+    await listen<string>("chat-reasoning", (e) => {
+      const last = messages.value[messages.value.length - 1];
+      if (last && last.role === "assistant")
+        last.reasoning = (last.reasoning ?? "") + e.payload;
     })
   );
   unlisteners.push(

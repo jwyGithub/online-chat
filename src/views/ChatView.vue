@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
 import Icon from "../components/Icon.vue";
 import { useChat } from "../composables/useChat";
@@ -15,6 +15,15 @@ const canSend = computed(() => input.value.trim().length > 0 && !streaming.value
 
 function isStreamingLast(i: number): boolean {
   return streaming.value && i === messages.value.length - 1;
+}
+
+// 思考面板展开状态：用户未手动切换时，流式中默认展开、结束后默认折叠。
+const reasoningExpanded = reactive<Record<number, boolean>>({});
+function isReasoningOpen(i: number): boolean {
+  return reasoningExpanded[i] ?? isStreamingLast(i);
+}
+function toggleReasoning(i: number) {
+  reasoningExpanded[i] = !isReasoningOpen(i);
 }
 
 function onScroll() {
@@ -120,6 +129,15 @@ function onCompositionEnd() {
             v-else
             class="max-w-[84%] rounded-lg rounded-bl-[5px] border border-line bg-surface px-3.5 py-2.5 leading-relaxed shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
           >
+            <div v-if="m.reasoning" class="reasoning" :class="{ open: isReasoningOpen(i) }">
+              <button type="button" class="reasoning-head" @click="toggleReasoning(i)">
+                <Icon name="sparkles" :size="13" />
+                <span class="reasoning-title">思考过程</span>
+                <Icon name="hide" :size="14" class="reasoning-chev" />
+              </button>
+              <div v-if="isReasoningOpen(i)" class="reasoning-body">{{ m.reasoning }}</div>
+            </div>
+
             <div
               v-if="!m.content && isStreamingLast(i)"
               class="typing"
@@ -194,6 +212,55 @@ function onCompositionEnd() {
 </template>
 
 <style scoped>
+/* 思考过程面板 */
+.reasoning {
+  margin-bottom: 8px;
+  border: 1px solid var(--color-hairline, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  background: rgba(34, 211, 238, 0.05);
+  overflow: hidden;
+}
+.reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--color-fg, #cbd5e1);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.reasoning-head :first-child {
+  color: #22d3ee;
+}
+.reasoning-title {
+  flex: 1;
+}
+.reasoning-chev {
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+  opacity: 0.6;
+}
+.reasoning.open .reasoning-chev {
+  transform: rotate(0deg);
+}
+.reasoning-body {
+  padding: 2px 10px 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-fg, #cbd5e1);
+  opacity: 0.72;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--color-hairline, rgba(255, 255, 255, 0.06));
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 /* 打字指示器 */
 .typing {
   display: inline-flex;

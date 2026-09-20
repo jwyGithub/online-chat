@@ -13,6 +13,12 @@ pub struct Config {
     pub system_prompt: String,
     pub hotkey: String,
     pub hide_on_blur: bool,
+    /// 上游端点协议：chat（/chat/completions）| responses（/responses）| messages（/messages）
+    pub api_protocol: String,
+    /// 是否开启思考（reasoning / thinking）
+    pub thinking_enabled: bool,
+    /// 思考强度：low | medium | high
+    pub thinking_effort: String,
 }
 
 impl Default for Config {
@@ -24,6 +30,9 @@ impl Default for Config {
             system_prompt: String::new(),
             hotkey: "CmdOrCtrl+Shift+Space".into(),
             hide_on_blur: true,
+            api_protocol: "chat".into(),
+            thinking_enabled: false,
+            thinking_effort: "medium".into(),
         }
     }
 }

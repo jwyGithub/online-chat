@@ -62,6 +62,16 @@ async function onSave() {
           <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="cpu" :size="15" /> 模型 (Model)</span>
           <input v-model="form.model" placeholder="gpt-4o-mini" />
         </label>
+
+        <label class="flex flex-col gap-1.75">
+          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="link" :size="15" /> 端点协议 (Endpoint)</span>
+          <div class="seg">
+            <button type="button" class="seg-item" :class="{ active: form.api_protocol === 'chat' }" @click="form.api_protocol = 'chat'">Chat Completions</button>
+            <button type="button" class="seg-item" :class="{ active: form.api_protocol === 'responses' }" @click="form.api_protocol = 'responses'">Responses</button>
+            <button type="button" class="seg-item" :class="{ active: form.api_protocol === 'messages' }" @click="form.api_protocol = 'messages'">Messages</button>
+          </div>
+          <small class="text-[11px] text-fg-3">分别请求 /chat/completions、/responses、/messages</small>
+        </label>
       </section>
 
       <section class="flex flex-col gap-3.5">
@@ -82,6 +92,32 @@ async function onSave() {
             :style="{ '--val': form.temperature / 2 }"
           />
           <small class="text-[11px] text-fg-3">值越高越发散，越低越确定</small>
+        </label>
+
+        <div class="flex flex-col gap-1.75">
+          <label class="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3.5 py-3">
+            <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="sparkles" :size="15" /> 思考 / 推理 (Thinking)</span>
+            <span class="relative inline-flex h-6 w-10.5 shrink-0">
+              <input v-model="form.thinking_enabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="absolute inset-0 rounded-full border border-line bg-surface-3 transition-colors duration-200 peer-checked:border-transparent peer-checked:bg-grad-accent peer-focus-visible:shadow-[0_0_0_3px_rgba(34,211,238,0.18)]"
+              ></span>
+              <span
+                class="pointer-events-none absolute left-0.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)] transition-transform duration-200 peer-checked:translate-x-4.5"
+              ></span>
+            </span>
+          </label>
+          <small class="text-[11px] text-fg-3">开启后模型会先输出推理过程，展示在回答上方的思考面板中</small>
+        </div>
+
+        <label v-if="form.thinking_enabled" class="flex flex-col gap-1.75">
+          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="sparkles" :size="15" /> 思考强度 (Effort)</span>
+          <div class="seg">
+            <button type="button" class="seg-item" :class="{ active: form.thinking_effort === 'low' }" @click="form.thinking_effort = 'low'">低</button>
+            <button type="button" class="seg-item" :class="{ active: form.thinking_effort === 'medium' }" @click="form.thinking_effort = 'medium'">中</button>
+            <button type="button" class="seg-item" :class="{ active: form.thinking_effort === 'high' }" @click="form.thinking_effort = 'high'">高</button>
+          </div>
+          <small class="text-[11px] text-fg-3">越高思考越充分，但响应更慢、消耗更多 token</small>
         </label>
 
         <label class="flex flex-col gap-1.75">
@@ -180,6 +216,40 @@ async function onSave() {
   border-radius: 50%;
   background: #fff;
   border: 3px solid var(--color-accent);
+}
+
+/* ---------- 分段选择器（端点协议 / 思考强度） ---------- */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.seg-item {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-fg-3);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.seg-item:hover {
+  color: var(--color-fg-2);
+}
+.seg-item.active {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-2);
+}
+.seg-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-ring);
 }
 
 /* ---------- 状态提示淡入淡出（Vue 过渡类） ---------- */

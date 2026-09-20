@@ -1,6 +1,9 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+export type ApiProtocol = "chat" | "responses" | "messages";
+export type ThinkingEffort = "low" | "medium" | "high";
+
 export interface AppConfig {
   base_url: string;
   model: string;
@@ -8,6 +11,9 @@ export interface AppConfig {
   system_prompt: string;
   hotkey: string;
   hide_on_blur: boolean;
+  api_protocol: ApiProtocol;
+  thinking_enabled: boolean;
+  thinking_effort: ThinkingEffort;
 }
 
 const defaults: AppConfig = {
@@ -17,6 +23,9 @@ const defaults: AppConfig = {
   system_prompt: "",
   hotkey: "CmdOrCtrl+Shift+Space",
   hide_on_blur: true,
+  api_protocol: "chat",
+  thinking_enabled: false,
+  thinking_effort: "medium",
 };
 
 // 模块级单例，跨组件共享
