@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type ApiProtocol = "chat" | "responses" | "messages";
 export type ThinkingEffort = "low" | "medium" | "high";
+export type ProxyType = "http" | "https" | "socks5";
 
 export interface AppConfig {
   base_url: string;
@@ -14,6 +15,9 @@ export interface AppConfig {
   api_protocol: ApiProtocol;
   thinking_enabled: boolean;
   thinking_effort: ThinkingEffort;
+  proxy_enabled: boolean;
+  proxy_type: ProxyType;
+  proxy_url: string;
 }
 
 const defaults: AppConfig = {
@@ -26,6 +30,9 @@ const defaults: AppConfig = {
   api_protocol: "chat",
   thinking_enabled: false,
   thinking_effort: "medium",
+  proxy_enabled: false,
+  proxy_type: "http",
+  proxy_url: "",
 };
 
 // 模块级单例，跨组件共享

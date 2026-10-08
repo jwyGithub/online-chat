@@ -51,7 +51,19 @@ pub async fn send_chat(
     let body = build_body(&cfg, protocol, &messages);
 
     // Key 与自定义 base_url 仍留在 Rust 端。
-    let client = reqwest::Client::new();
+    // 启用代理时，所有上游请求都经代理转发（支持 http / https / socks5）。
+    let mut client_builder = reqwest::Client::builder();
+    if cfg.proxy_enabled {
+        if let Some(proxy_url) = build_proxy_url(&cfg.proxy_type, &cfg.proxy_url) {
+            let proxy = reqwest::Proxy::all(&proxy_url)
+                .map_err(|e| format!("代理配置无效（{proxy_url}）: {e}"))?;
+            client_builder = client_builder.proxy(proxy);
+        }
+    }
+    let client = client_builder
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
     let mut builder = client
         .post(&url)
         .header("Accept", "text/event-stream")
@@ -83,6 +95,25 @@ pub async fn send_chat(
         let _ = app.emit("chat-done", ());
     }
     Ok(())
+}
+
+/// 组装代理 URL。地址为空时返回 None（视为未配置，直连）。
+/// 若用户已在地址里写了协议（含 "://"）则原样使用；否则按 proxy_type 补全协议。
+/// proxy_type 未知时回退到 http。地址可带鉴权，如 user:pass@host:port。
+fn build_proxy_url(proxy_type: &str, raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    if raw.contains("://") {
+        return Some(raw.to_string());
+    }
+    let scheme = match proxy_type {
+        "https" => "https",
+        "socks5" => "socks5",
+        _ => "http",
+    };
+    Some(format!("{scheme}://{raw}"))
 }
 
 /// 归一化协议名，未知值回退到 chat。

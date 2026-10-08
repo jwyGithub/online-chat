@@ -149,6 +149,41 @@ async function onSave() {
           </span>
         </label>
       </section>
+
+      <section class="flex flex-col gap-3.5">
+        <h3 class="m-0 text-[11px] font-semibold uppercase tracking-[0.8px] text-fg-3">网络代理</h3>
+
+        <div class="flex flex-col gap-1.75">
+          <label class="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-line bg-surface-2 px-3.5 py-3">
+            <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="settings" :size="15" /> 启用代理</span>
+            <span class="relative inline-flex h-6 w-10.5 shrink-0">
+              <input v-model="form.proxy_enabled" type="checkbox" class="peer sr-only" />
+              <span
+                class="absolute inset-0 rounded-full border border-line bg-surface-3 transition-colors duration-200 peer-checked:border-transparent peer-checked:bg-grad-accent peer-focus-visible:shadow-[0_0_0_3px_rgba(34,211,238,0.18)]"
+              ></span>
+              <span
+                class="pointer-events-none absolute left-0.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)] transition-transform duration-200 peer-checked:translate-x-4.5"
+              ></span>
+            </span>
+          </label>
+          <small class="text-[11px] text-fg-3">开启后所有上游请求都会经代理转发</small>
+        </div>
+
+        <label v-if="form.proxy_enabled" class="flex flex-col gap-1.75">
+          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="settings" :size="15" /> 代理类型 (Type)</span>
+          <div class="seg">
+            <button type="button" class="seg-item" :class="{ active: form.proxy_type === 'socks5' }" @click="form.proxy_type = 'socks5'">SOCKS5</button>
+            <button type="button" class="seg-item" :class="{ active: form.proxy_type === 'http' }" @click="form.proxy_type = 'http'">HTTP</button>
+            <button type="button" class="seg-item" :class="{ active: form.proxy_type === 'https' }" @click="form.proxy_type = 'https'">HTTPS</button>
+          </div>
+        </label>
+
+        <label v-if="form.proxy_enabled" class="flex flex-col gap-1.75">
+          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="link" :size="15" /> 代理地址 (Address)</span>
+          <input v-model="form.proxy_url" placeholder="127.0.0.1:1080" />
+          <small class="text-[11px] text-fg-3">host:port 格式，可带鉴权（user:pass@host:port）；留空则直连</small>
+        </label>
+      </section>
     </div>
 
     <div class="flex flex-none items-center justify-end gap-3 border-t border-hairline bg-bg-2 px-4 py-3">

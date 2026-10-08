@@ -19,6 +19,12 @@ pub struct Config {
     pub thinking_enabled: bool,
     /// 思考强度：low | medium | high
     pub thinking_effort: String,
+    /// 是否启用网络代理（启用后所有上游请求都经代理转发）
+    pub proxy_enabled: bool,
+    /// 代理协议：http | https | socks5
+    pub proxy_type: String,
+    /// 代理地址：host:port，可带鉴权（user:pass@host:port）；也可直接写含协议的完整 URL
+    pub proxy_url: String,
 }
 
 impl Default for Config {
@@ -33,6 +39,9 @@ impl Default for Config {
             api_protocol: "chat".into(),
             thinking_enabled: false,
             thinking_effort: "medium".into(),
+            proxy_enabled: false,
+            proxy_type: "http".into(),
+            proxy_url: String::new(),
         }
     }
 }
