@@ -64,6 +64,27 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      # tag(例如 v0.1.5)触发时，用 tag 作为唯一版本号来源写入 package.json 和 Cargo.toml。
+      # tauri.conf.json 的 version 已指向 ../package.json，因此打出来的安装包/资源名会随之变化。
+      # 手动触发(workflow_dispatch)时跳过此步，沿用仓库里已提交的版本号。
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          APP_VERSION: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const v = process.env.APP_VERSION.replace(/^v/, "");
+            const pj = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pj.version = v;
+            fs.writeFileSync("package.json", JSON.stringify(pj, null, 2) + "\n");
+            let cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+            cargo = cargo.replace(/^version = ".*"$/m, `version = "${v}"`);
+            fs.writeFileSync("src-tauri/Cargo.toml", cargo);
+            console.log("Synced version to", v);
+          '
+
       - name: Build & release (Tauri)
         uses: tauri-apps/tauri-action@v0
         env:
