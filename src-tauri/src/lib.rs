@@ -53,6 +53,7 @@ pub fn run() {
             secret::has_api_key,
             chat::send_chat,
             chat::cancel_chat,
+            chat::list_models,
             update_hotkey,
         ])
         .setup(|app| {

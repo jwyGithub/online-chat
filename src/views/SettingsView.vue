@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import Icon from "../components/Icon.vue";
 import { useConfig, type AppConfig } from "../composables/useConfig";
 
@@ -12,9 +13,41 @@ const saving = ref(false);
 const msg = ref("");
 const ok = ref(false);
 
+// 模型列表：从上游 {base_url}/models 拉取（经 Rust 端，复用代理与已存 Key）。
+const models = ref<string[]>([]);
+const modelsLoading = ref(false);
+const modelsError = ref("");
+
+// 下拉选项：始终包含当前已选模型，避免它不在返回列表里时被丢掉。
+const modelOptions = computed(() => {
+  const list = [...models.value];
+  if (form.model && !list.includes(form.model)) list.unshift(form.model);
+  return list;
+});
+
+async function fetchModels() {
+  modelsLoading.value = true;
+  modelsError.value = "";
+  try {
+    // base_url 用表单当前值；若用户刚输入了新 Key 则一并带上，否则后端回退到已存 Key。
+    models.value = await invoke<string[]>("list_models", {
+      baseUrl: form.base_url,
+      apiKey: apiKey.value.trim() ? apiKey.value.trim() : undefined,
+    });
+    if (!models.value.length) modelsError.value = "该接口未返回任何模型";
+  } catch (e) {
+    models.value = [];
+    modelsError.value = String(e);
+  } finally {
+    modelsLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   await load();
   Object.assign(form, config.value);
+  // 已配置 Key 时自动拉取一次模型列表
+  if (hasKey.value) fetchModels();
 });
 
 async function onSave() {
@@ -59,8 +92,26 @@ async function onSave() {
         </label>
 
         <label class="flex flex-col gap-1.75">
-          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3"><Icon name="cpu" :size="15" /> 模型 (Model)</span>
-          <input v-model="form.model" placeholder="gpt-4o-mini" />
+          <span class="inline-flex items-center gap-1.75 text-[13px] font-medium text-fg-2 [&_svg]:text-fg-3">
+            <Icon name="cpu" :size="15" /> 模型 (Model)
+            <button
+              type="button"
+              class="ml-auto inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="modelsLoading"
+              @click="fetchModels"
+            >
+              <Icon name="refresh" :size="12" :class="modelsLoading ? 'animate-spin' : ''" />
+              {{ modelsLoading ? "获取中…" : "刷新" }}
+            </button>
+          </span>
+          <select v-if="models.length" v-model="form.model">
+            <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <input v-else v-model="form.model" placeholder="gpt-4o-mini" />
+          <small v-if="modelsError" class="inline-flex items-center gap-1 text-[11px] text-danger">
+            <Icon name="alert" :size="12" /> {{ modelsError }}
+          </small>
+          <small v-else class="text-[11px] text-fg-3">从 {{ form.base_url || "Base URL" }}/models 获取，可点右上角刷新重新拉取</small>
         </label>
 
         <label class="flex flex-col gap-1.75">

@@ -97,6 +97,96 @@ pub async fn send_chat(
     Ok(())
 }
 
+/// 拉取可用模型列表：GET {base_url}/models（OpenAI 兼容，Anthropic 亦适用）。
+/// 与对话请求共用代理与鉴权逻辑，请求在 Rust 端发起（Key 不进前端、无 CORS）。
+/// base_url / api_key 可由设置页临时传入（尚未保存时也能预览列表）；
+/// 为空则回退到已保存的配置与 Key。返回去重排序后的模型 id 列表。
+#[tauri::command]
+pub async fn list_models(
+    app: AppHandle,
+    base_url: Option<String>,
+    api_key: Option<String>,
+) -> Result<Vec<String>, String> {
+    let cfg = read_config(&app);
+
+    let base = base_url
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| cfg.base_url.clone());
+    let key = api_key
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| read_api_key(&app));
+    if key.is_empty() {
+        return Err("未配置 API Key，请先填写".into());
+    }
+
+    let url = format!("{}/models", base.trim_end_matches('/'));
+
+    // 复用对话请求的代理设置（启用时所有上游请求都经代理转发）。
+    let mut client_builder = reqwest::Client::builder();
+    if cfg.proxy_enabled {
+        if let Some(proxy_url) = build_proxy_url(&cfg.proxy_type, &cfg.proxy_url) {
+            let proxy = reqwest::Proxy::all(&proxy_url)
+                .map_err(|e| format!("代理配置无效（{proxy_url}）: {e}"))?;
+            client_builder = client_builder.proxy(proxy);
+        }
+    }
+    let client = client_builder
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    let mut builder = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {key}"));
+
+    // Anthropic 的 /models 用 x-api-key + anthropic-version 鉴权，一并带上以兼容。
+    if normalize_protocol(&cfg.api_protocol) == "messages" {
+        builder = builder
+            .header("x-api-key", key.clone())
+            .header("anthropic-version", "2023-06-01");
+    }
+
+    let resp = builder
+        .send()
+        .await
+        .map_err(|e| format!("网络请求失败: {e}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("获取模型失败（{status}）: {}", truncate(&text, 500)));
+    }
+
+    let v: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("解析模型列表失败: {e}"))?;
+
+    // 兼容两种返回形态：{ "data": [ { "id": ... } ] }（OpenAI / Anthropic）
+    // 或直接是数组（元素为对象或字符串）。
+    let arr = v
+        .get("data")
+        .and_then(|d| d.as_array())
+        .or_else(|| v.as_array());
+    let mut ids: Vec<String> = match arr {
+        Some(items) => items
+            .iter()
+            .filter_map(|m| {
+                m.get("id")
+                    .and_then(|x| x.as_str())
+                    .or_else(|| m.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
+}
+
 /// 组装代理 URL。地址为空时返回 None（视为未配置，直连）。
 /// 若用户已在地址里写了协议（含 "://"）则原样使用；否则按 proxy_type 补全协议。
 /// proxy_type 未知时回退到 http。地址可带鉴权，如 user:pass@host:port。
