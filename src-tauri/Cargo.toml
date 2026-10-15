@@ -1,6 +1,6 @@
 [package]
 name = "online-chat"
-version = "0.1.4"
+version = "0.0.1"
 description = "极简托盘 AI 对话工具"
 authors = ["jiangwy"]
 edition = "2021"
