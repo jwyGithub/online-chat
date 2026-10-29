@@ -7,7 +7,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use chat::CancelState;
 
@@ -34,11 +34,30 @@ fn show_window(app: &tauri::AppHandle) {
 
 /// 运行时更新全局快捷键（设置里改快捷键后立即生效）。
 #[tauri::command]
-fn update_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<(), String> {
+fn update_hotkey(app: tauri::AppHandle, old_hotkey: String, hotkey: String) -> Result<(), String> {
     let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
-    gs.register(hotkey.as_str())
-        .map_err(|e| format!("快捷键无效或被占用: {e}"))
+    let new_shortcut: Shortcut = hotkey.parse().map_err(|e| format!("快捷键无效: {e}"))?;
+    let old_shortcut: Option<Shortcut> = old_hotkey.parse().ok();
+
+    if old_shortcut == Some(new_shortcut) {
+        return Ok(());
+    }
+
+    let new_was_registered = gs.is_registered(new_shortcut);
+    if !new_was_registered {
+        gs.register(new_shortcut)
+            .map_err(|e| format!("快捷键无效或被占用: {e}"))?;
+    }
+    if let Some(old_shortcut) = old_shortcut.filter(|shortcut| gs.is_registered(*shortcut)) {
+        if let Err(e) = gs.unregister(old_shortcut) {
+            let old_restored = gs.is_registered(old_shortcut) || gs.register(old_shortcut).is_ok();
+            if old_restored && !new_was_registered {
+                let _ = gs.unregister(new_shortcut);
+            }
+            return Err(format!("替换旧快捷键失败: {e}"));
+        }
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

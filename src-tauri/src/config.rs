@@ -54,7 +54,10 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// 读取配置，出错时回退到默认值
 pub fn read_config(app: &AppHandle) -> Config {
-    match config_path(app).ok().and_then(|p| fs::read_to_string(p).ok()) {
+    match config_path(app)
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
+    {
         Some(s) => serde_json::from_str(&s).unwrap_or_default(),
         None => Config::default(),
     }

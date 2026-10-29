@@ -9,7 +9,7 @@ QuickChat 是一款基于 [Tauri 2](https://tauri.app/) + Vue 3 构建的轻量�
 - **全局快捷键唤出/隐藏**：默认 `CmdOrCtrl+Shift+Space`，在任意应用中按下都能切换窗口显隐；快捷键可在设置中自定义并即时生效。
 - **托盘常驻**：系统托盘图标 + 右键菜单（显示/隐藏、设置、退出）。macOS 下使用模板图标，随亮/暗菜单栏自动反色，并设为 Accessory 模式（不占 Dock）。
 - **无边框沉浸窗口**：透明、圆角阴影、置顶、居中、不显示在任务栏，失焦可自动隐藏（可关闭）。
-- **流式对话**：请求在 Rust 端发起（无 CORS 问题，API Key 不进入前端），基于 async-openai 解析 SSE，逐 token 推送到前端实时渲染，支持随时「停止生成」。
+- **流式对话**：请求在 Rust 端通过 reqwest 发起（无 CORS 问题，API Key 不进入前端），解析 SSE 并逐 token 推送到前端实时渲染，支持随时「停止生成」。
 - **Markdown 渲染**：内置 Markdown / 流式 Markdown 渲染与 XSS 净化。
 - **兼容任意 OpenAI 协议服务**：可自定义 `base_url`、`model`、`temperature`、`system_prompt`，接入 OpenAI 官方或任意兼容端点。
 - **本地存储、隐私优先**：配置与 API Key 分别保存在应用本地配置目录，Key 单独存放且不向前端暴露明文。
@@ -18,8 +18,8 @@ QuickChat 是一款基于 [Tauri 2](https://tauri.app/) + Vue 3 构建的轻量�
 
 | 层 | 技术 |
 | --- | --- |
-| 前端 | Vue 3、TypeScript、Vite 8、Tailwind CSS v4、GSAP、marked + DOMPurify、markstream-vue |
-| 后端（原生） | Rust、Tauri 2、tauri-plugin-global-shortcut、tauri-plugin-opener、async-openai、tokio |
+| 前端 | Vue 3、TypeScript、Vite 8、Tailwind CSS v4、GSAP、markstream-vue |
+| 后端（原生） | Rust、Tauri 2、tauri-plugin-global-shortcut、tauri-plugin-opener、reqwest、tokio |
 
 ## 环境要求
 
@@ -55,7 +55,7 @@ pnpm build      # 类型检查 + 构建前端产物到 dist/
 pnpm tauri build
 ```
 
-本仓库已配置多平台自动打包的 GitHub Actions（`.github/workflows/release.yml`）：推送形如 `v0.1.0` 的 tag（或在 Actions 页手动触发）即会为 macOS（Apple Silicon / Intel）、Linux、Windows 分别构建并汇总为一个 **草稿 Release**。
+本仓库已配置多平台自动打包的 GitHub Actions（`.github/workflows/release.yml`）：推送形如 `v0.1.0` 的 tag（或在 Actions 页手动触发）即会为 macOS（Apple Silicon / Intel）和 Windows（x64 / ARM64）构建，并汇总为一个 **草稿 Release**。当前工作流未配置 Linux 构建。
 
 ```bash
 git tag v0.1.0
@@ -76,6 +76,11 @@ git push origin v0.1.0
 | `system_prompt` | 系统提示词 | 空 |
 | `hotkey` | 全局快捷键 | `CmdOrCtrl+Shift+Space` |
 | `hide_on_blur` | 窗口失焦时自动隐藏 | `true` |
+| `api_protocol` | 上游端点协议：chat / responses / messages | `chat` |
+| `thinking_enabled` | 是否请求模型输出思考内容 | `false` |
+| `thinking_effort` | 思考强度：low / medium / high | `medium` |
+| `proxy_enabled` | 是否启用上游 HTTP 代理 | `false` |
+| `proxy_type` / `proxy_url` | 代理协议与地址 | `http` / 空 |
 
 配置目录位置随操作系统而定（Tauri `app_config_dir`），例如：
 

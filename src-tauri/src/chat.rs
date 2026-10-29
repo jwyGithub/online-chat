@@ -99,20 +99,22 @@ pub async fn send_chat(
 
 /// 拉取可用模型列表：GET {base_url}/models（OpenAI 兼容，Anthropic 亦适用）。
 /// 与对话请求共用代理与鉴权逻辑，请求在 Rust 端发起（Key 不进前端、无 CORS）。
-/// base_url / api_key 可由设置页临时传入（尚未保存时也能预览列表）；
-/// 为空则回退到已保存的配置与 Key。返回去重排序后的模型 id 列表。
+/// 配置与 api_key 可由设置页临时传入（尚未保存时也能预览列表）；
+/// 未传入时回退到已保存的配置与 Key。返回去重排序后的模型 id 列表。
 #[tauri::command]
 pub async fn list_models(
     app: AppHandle,
-    base_url: Option<String>,
+    config: Option<Config>,
     api_key: Option<String>,
 ) -> Result<Vec<String>, String> {
-    let cfg = read_config(&app);
+    let saved_cfg = read_config(&app);
+    let cfg = config.unwrap_or_else(|| saved_cfg.clone());
 
-    let base = base_url
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| cfg.base_url.clone());
+    let base = if cfg.base_url.trim().is_empty() {
+        saved_cfg.base_url.trim()
+    } else {
+        cfg.base_url.trim()
+    };
     let key = api_key
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -155,7 +157,10 @@ pub async fn list_models(
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("获取模型失败（{status}）: {}", truncate(&text, 500)));
+        return Err(format!(
+            "获取模型失败（{status}）: {}",
+            truncate(&text, 500)
+        ));
     }
 
     let v: Value = resp
@@ -245,7 +250,11 @@ fn build_body(cfg: &Config, protocol: &str, messages: &[ChatMessage]) -> Value {
             let input: Vec<Value> = messages
                 .iter()
                 .map(|m| {
-                    let role = if m.role == "assistant" { "assistant" } else { "user" };
+                    let role = if m.role == "assistant" {
+                        "assistant"
+                    } else {
+                        "user"
+                    };
                     json!({
                         "type": "message",
                         "role": role,
@@ -271,12 +280,20 @@ fn build_body(cfg: &Config, protocol: &str, messages: &[ChatMessage]) -> Value {
             let msgs: Vec<Value> = messages
                 .iter()
                 .map(|m| {
-                    let role = if m.role == "assistant" { "assistant" } else { "user" };
+                    let role = if m.role == "assistant" {
+                        "assistant"
+                    } else {
+                        "user"
+                    };
                     json!({ "role": role, "content": m.content })
                 })
                 .collect();
             let budget = effort_budget(effort);
-            let max_tokens = if cfg.thinking_enabled { budget + 4096 } else { 4096 };
+            let max_tokens = if cfg.thinking_enabled {
+                budget + 4096
+            } else {
+                4096
+            };
             let mut body = json!({
                 "model": cfg.model,
                 "messages": msgs,
@@ -301,7 +318,11 @@ fn build_body(cfg: &Config, protocol: &str, messages: &[ChatMessage]) -> Value {
                 msgs.push(json!({ "role": "system", "content": system }));
             }
             for m in messages {
-                let role = if m.role == "assistant" { "assistant" } else { "user" };
+                let role = if m.role == "assistant" {
+                    "assistant"
+                } else {
+                    "user"
+                };
                 msgs.push(json!({ "role": role, "content": m.content }));
             }
             let mut body = json!({
@@ -342,7 +363,7 @@ async fn stream_sse(
         // 帧分隔符是空行（\n\n 或 \r\n\r\n），均为 ASCII，切帧不会截断多字节字符。
         while let Some((end, sep_len)) = find_frame_end(&buf) {
             let frame: Vec<u8> = buf.drain(..end + sep_len).collect();
-            let done = process_frame(app, protocol, &frame[..end]);
+            let done = process_frame(app, protocol, &frame[..end])?;
             if done {
                 return Ok(());
             }
@@ -351,7 +372,7 @@ async fn stream_sse(
 
     // 处理流结束时缓冲区里可能残留的最后一帧（无结尾空行）。
     if !buf.is_empty() {
-        let _ = process_frame(app, protocol, &buf);
+        let _ = process_frame(app, protocol, &buf)?;
     }
     Ok(())
 }
@@ -378,7 +399,7 @@ fn find_frame_end(buf: &[u8]) -> Option<(usize, usize)> {
 }
 
 /// 解析单帧 SSE，按协议分发增量。返回 true 表示上游已明确结束（[DONE] / 完成事件）。
-fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> bool {
+fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> Result<bool, String> {
     let text = String::from_utf8_lossy(frame);
     let mut event_name = String::new();
     let mut data_lines: Vec<&str> = Vec::new();
@@ -393,33 +414,29 @@ fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> bool {
     }
 
     if data_lines.is_empty() {
-        return false;
+        return Ok(false);
     }
     let data = data_lines.join("\n");
     let data = data.trim();
     if data == "[DONE]" {
-        return true;
+        return Ok(true);
     }
 
     match protocol {
-        "responses" => {
-            let v: Value = match serde_json::from_str(data) {
-                Ok(v) => v,
-                Err(_) => return false,
-            };
-            match event_name.as_str() {
-                "response.output_text.delta" => emit_str(app, "chat-token", v.get("delta")),
-                "response.reasoning_summary_text.delta" => {
-                    emit_str(app, "chat-reasoning", v.get("delta"))
-                }
-                "response.completed" | "response.done" | "response.failed" => return true,
-                _ => {}
+        "responses" => match parse_responses_event(&event_name, data)? {
+            Some(ResponsesEvent::Token(text)) => {
+                let _ = app.emit("chat-token", text);
             }
-        }
+            Some(ResponsesEvent::Reasoning(text)) => {
+                let _ = app.emit("chat-reasoning", text);
+            }
+            Some(ResponsesEvent::Done) => return Ok(true),
+            None => {}
+        },
         "messages" => {
             let v: Value = match serde_json::from_str(data) {
                 Ok(v) => v,
-                Err(_) => return false,
+                Err(_) => return Ok(false),
             };
             match v.get("type").and_then(|t| t.as_str()).unwrap_or("") {
                 "content_block_delta" => {
@@ -433,7 +450,7 @@ fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> bool {
                         }
                     }
                 }
-                "message_stop" => return true,
+                "message_stop" => return Ok(true),
                 _ => {}
             }
         }
@@ -441,7 +458,7 @@ fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> bool {
         _ => {
             let v: Value = match serde_json::from_str(data) {
                 Ok(v) => v,
-                Err(_) => return false,
+                Err(_) => return Ok(false),
             };
             if let Some(choices) = v.get("choices").and_then(|c| c.as_array()) {
                 for choice in choices {
@@ -454,7 +471,40 @@ fn process_frame(app: &AppHandle, protocol: &str, frame: &[u8]) -> bool {
             }
         }
     }
-    false
+    Ok(false)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ResponsesEvent {
+    Token(String),
+    Reasoning(String),
+    Done,
+}
+
+fn parse_responses_event(event_name: &str, data: &str) -> Result<Option<ResponsesEvent>, String> {
+    let v: Value = match serde_json::from_str(data) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+
+    match event_name {
+        "response.output_text.delta" => Ok(v
+            .get("delta")
+            .and_then(Value::as_str)
+            .map(|s| ResponsesEvent::Token(s.to_string()))),
+        "response.reasoning_summary_text.delta" => Ok(v
+            .get("delta")
+            .and_then(Value::as_str)
+            .map(|s| ResponsesEvent::Reasoning(s.to_string()))),
+        "response.completed" | "response.done" => Ok(Some(ResponsesEvent::Done)),
+        "response.failed" => Err(v
+            .pointer("/response/error/message")
+            .or_else(|| v.pointer("/error/message"))
+            .and_then(Value::as_str)
+            .unwrap_or("Responses API 返回失败事件")
+            .to_string()),
+        _ => Ok(None),
+    }
 }
 
 /// 若 value 是非空字符串，则以指定事件名推送。
@@ -474,5 +524,69 @@ fn truncate(s: &str, n: usize) -> String {
         let mut out: String = s.chars().take(n).collect();
         out.push('…');
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_frame_end, parse_responses_event, ResponsesEvent};
+
+    #[test]
+    fn responses_failed_event_returns_upstream_error() {
+        let error = parse_responses_event(
+            "response.failed",
+            r#"{"response":{"error":{"message":"模型暂时不可用"}}}"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "模型暂时不可用");
+    }
+
+    #[test]
+    fn responses_completed_event_is_successful_terminal_event() {
+        assert!(matches!(
+            parse_responses_event("response.completed", r#"{"type":"response.completed"}"#)
+                .unwrap(),
+            Some(ResponsesEvent::Done)
+        ));
+    }
+
+    #[test]
+    fn sse_frame_end_accepts_lf_and_crlf() {
+        assert_eq!(find_frame_end(b"data: x\n\nrest"), Some((7, 2)));
+        assert_eq!(find_frame_end(b"data: x\r\n\r\nrest"), Some((7, 4)));
+    }
+
+    #[test]
+    fn responses_text_delta_is_forwarded_as_token() {
+        assert_eq!(
+            parse_responses_event("response.output_text.delta", r#"{"delta":"hello"}"#).unwrap(),
+            Some(ResponsesEvent::Token("hello".into()))
+        );
+    }
+
+    #[test]
+    fn request_bodies_keep_protocol_specific_fields() {
+        use super::{build_body, ChatMessage};
+        use crate::config::Config;
+
+        let mut config = Config::default();
+        config.system_prompt = "system".into();
+        let messages = [ChatMessage {
+            role: "user".into(),
+            content: "hello".into(),
+        }];
+
+        let chat = build_body(&config, "chat", &messages);
+        assert_eq!(chat["messages"][0]["role"], "system");
+        assert_eq!(chat["messages"][1]["content"], "hello");
+
+        let responses = build_body(&config, "responses", &messages);
+        assert_eq!(responses["input"][0]["role"], "user");
+        assert!(responses.get("messages").is_none());
+
+        let messages_api = build_body(&config, "messages", &messages);
+        assert_eq!(messages_api["messages"][0]["content"], "hello");
+        assert_eq!(messages_api["max_tokens"], 4096);
     }
 }

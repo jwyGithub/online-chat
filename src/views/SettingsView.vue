@@ -29,9 +29,9 @@ async function fetchModels() {
   modelsLoading.value = true;
   modelsError.value = "";
   try {
-    // base_url 用表单当前值；若用户刚输入了新 Key 则一并带上，否则后端回退到已存 Key。
+    // 使用整份当前草稿配置，未保存的协议和代理变更也会立即生效。
     models.value = await invoke<string[]>("list_models", {
-      baseUrl: form.base_url,
+      config: { ...form },
       apiKey: apiKey.value.trim() ? apiKey.value.trim() : undefined,
     });
     if (!models.value.length) modelsError.value = "该接口未返回任何模型";

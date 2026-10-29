@@ -46,17 +46,18 @@ export function useConfig() {
   }
 
   async function save(next: AppConfig, apiKey?: string) {
-    await invoke("save_config", { config: next });
+    const oldHotkey = config.value.hotkey;
+    await invoke("update_hotkey", { oldHotkey, hotkey: next.hotkey });
+    try {
+      await invoke("save_config", { config: next });
+    } catch (e) {
+      await invoke("update_hotkey", { oldHotkey: next.hotkey, hotkey: oldHotkey }).catch(() => {});
+      throw e;
+    }
     config.value = { ...next };
     if (apiKey !== undefined) {
       await invoke("set_api_key", { key: apiKey });
       hasKey.value = apiKey.trim().length > 0;
-    }
-    // 快捷键改动即时生效（失败不阻塞保存）
-    try {
-      await invoke("update_hotkey", { hotkey: next.hotkey });
-    } catch (e) {
-      console.warn("更新快捷键失败", e);
     }
   }
 
